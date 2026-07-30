@@ -38,7 +38,7 @@ import { DraggablePanel } from '../components/DraggablePanel';
 import { Whiteboard, type WhiteboardHandle, type WhiteboardStroke, type WhiteboardText } from '../components/Whiteboard';
 import type { Nib, TextFont } from '../utils/brush';
 import { WhiteboardToolbar } from '../components/WhiteboardToolbar';
-import { Dock, type DockEntry } from '../components/Dock';
+import { Dock, DockButton, type DockEntry } from '../components/Dock';
 import { usePeer } from '../hooks/usePeer';
 import { useYouTubeSync, type SyncMessage } from '../hooks/useYouTubeSync';
 import type { PanelId, PanelState, DynamicPanel, NoteContent } from '../types/panels';
@@ -434,9 +434,10 @@ export function Session({ roomCode, isHost }: SessionProps) {
 				label: `Area ${positionTagsRef.current.length + 1}`
 			};
 			setPositionTags(prev => [...prev, tag]);
-			setDockedIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+			// Deliberately not docked on creation. Selecting an area makes the
+			// asset; tagging it is a separate act, the same way spawning a panel
+			// is separate from bookmarking one.
 			sendSync({ type: 'position-tag', id, x: tag.x, y: tag.y, w: tag.w, h: tag.h, label: tag.label });
-			sendSync({ type: 'dock-tag', id });
 		},
 		[sendSync]
 	);
@@ -1336,10 +1337,34 @@ export function Session({ roomCode, isHost }: SessionProps) {
 					tag.w && tag.h ? (
 						<div
 							key={tag.id}
-							className="absolute z-[5] rounded-md border-2 border-dashed border-amber-400/70 bg-amber-400/5 pointer-events-none"
-							style={{ left: tag.x, top: tag.y, width: tag.w, height: tag.h }}
-							title={customLabels[tag.id] ?? tag.label}
-						/>
+							className="absolute z-[5]"
+							style={{ left: tag.x, top: tag.y, width: tag.w, height: tag.h }}>
+							{/* Header — the only part that takes clicks, so the area
+							    itself stays drawable through. */}
+							<div
+								className="absolute left-0 right-0 flex items-center justify-between gap-2 px-2 py-1 rounded-t-md bg-amber-400/90 text-amber-950 pointer-events-auto"
+								style={{ bottom: '100%' }}>
+								<span className="text-xs font-semibold truncate">
+									{customLabels[tag.id] ?? tag.label}
+								</span>
+								<div className="flex items-center gap-1 shrink-0">
+									<DockButton
+										docked={dockedIds.includes(tag.id)}
+										onToggle={() => toggleDock(tag.id)}
+									/>
+									<button
+										onClick={() => removeDockEntry(tag.id)}
+										title="Remove this area"
+										aria-label={`Remove ${customLabels[tag.id] ?? tag.label}`}
+										className="opacity-70 hover:opacity-100 transition-opacity">
+										<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+											<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+										</svg>
+									</button>
+								</div>
+							</div>
+							<div className="absolute inset-0 rounded-md rounded-tl-none border-2 border-dashed border-amber-400/70 bg-amber-400/5 pointer-events-none" />
+						</div>
 					) : (
 					<div
 						key={tag.id}
