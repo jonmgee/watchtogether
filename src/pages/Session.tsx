@@ -335,16 +335,24 @@ export function Session({ roomCode, isHost }: SessionProps) {
 			// The panel is gone, so any local dock chip pointing at it must go too
 			forgetPanel(msg.id);
 		} else if (msg.type === 'position-tag') {
+			const hasBounds = msg.w !== undefined && msg.h !== undefined;
 			const tag: PositionTag = {
-				...(msg.w !== undefined && msg.h !== undefined ? { w: msg.w, h: msg.h } : {}),
+				...(hasBounds
+					? { w: msg.w! * window.innerWidth, h: msg.h! * window.innerHeight }
+					: {}),
 				id: msg.id,
 				x: msg.x * window.innerWidth,
 				y: msg.y * window.innerHeight,
 				label: msg.label
 			};
 			setPositionTags(prev => (prev.some(item => item.id === tag.id) ? prev : [...prev, tag]));
-			setDockedIds(prev => (prev.includes(tag.id) ? prev : [...prev, tag.id]));
-			startPulse(tag.id);
+			// A point tag is created by long-pressing and shared straight away, so
+			// it docks on both sides. An area is an asset you tag deliberately, so
+			// it only reaches the dock when its tag button is used.
+			if (!hasBounds) {
+				setDockedIds(prev => (prev.includes(tag.id) ? prev : [...prev, tag.id]));
+				startPulse(tag.id);
+			}
 		} else if (msg.type === 'position-tag-remove') {
 			setPositionTags(prev => prev.filter(tag => tag.id !== msg.id));
 			forgetPanel(msg.id);
@@ -437,7 +445,18 @@ export function Session({ roomCode, isHost }: SessionProps) {
 			// Deliberately not docked on creation. Selecting an area makes the
 			// asset; tagging it is a separate act, the same way spawning a panel
 			// is separate from bookmarking one.
-			sendSync({ type: 'position-tag', id, x: tag.x, y: tag.y, w: tag.w, h: tag.h, label: tag.label });
+			// x/y/w/h go over the wire as viewport fractions, exactly as panels do.
+			// The receiver multiplies them back out against its own viewport, so
+			// sending world pixels here would have them scaled a second time.
+			sendSync({
+				type: 'position-tag',
+				id,
+				x: r.x,
+				y: r.y,
+				w: r.w / window.innerWidth,
+				h: r.h / window.innerHeight,
+				label: tag.label
+			});
 		},
 		[sendSync]
 	);
